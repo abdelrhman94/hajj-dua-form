@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const entries = readEntries();
+  const entries = await readEntries();
   return NextResponse.json(entries);
 }
 
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const entry = addEntry(name.trim(), sanitizedDuas);
+    const entry = await addEntry(name.trim(), sanitizedDuas);
     return NextResponse.json(entry, { status: 201 });
   } catch {
     return NextResponse.json(

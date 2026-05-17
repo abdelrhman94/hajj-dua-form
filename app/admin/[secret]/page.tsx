@@ -14,7 +14,7 @@ export default async function AdminPage({ params }: PageProps) {
     notFound();
   }
 
-  const entries = readEntries();
+  const entries = await readEntries();
 
   return <AdminClient entries={entries} secretKey={secret} />;
 }

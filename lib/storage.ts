@@ -1,34 +1,30 @@
-import fs from "fs";
-import path from "path";
 import { DuaEntry } from "./types";
+import { Redis } from "@upstash/redis";
 
 export type { DuaEntry };
 
-const DATA_PATH = path.join(process.cwd(), "data", "duas.json");
+const REDIS_KEY = "hajj-duas";
 
-function ensureDataFile() {
-  const dir = path.dirname(DATA_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  if (!fs.existsSync(DATA_PATH)) {
-    fs.writeFileSync(DATA_PATH, "[]", "utf-8");
-  }
+function getRedis() {
+  return new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+  });
 }
 
-export function readEntries(): DuaEntry[] {
-  ensureDataFile();
+export async function readEntries(): Promise<DuaEntry[]> {
   try {
-    const raw = fs.readFileSync(DATA_PATH, "utf-8");
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const redis = getRedis();
+    const data = await redis.get<DuaEntry[]>(REDIS_KEY);
+    return data ?? [];
   } catch {
     return [];
   }
 }
 
-export function addEntry(name: string, duas: string[]): DuaEntry {
-  const entries = readEntries();
+export async function addEntry(name: string, duas: string[]): Promise<DuaEntry> {
+  const redis = getRedis();
+  const entries = await readEntries();
   const entry: DuaEntry = {
     id: Date.now(),
     name,
@@ -38,6 +34,6 @@ export function addEntry(name: string, duas: string[]): DuaEntry {
     }),
   };
   entries.push(entry);
-  fs.writeFileSync(DATA_PATH, JSON.stringify(entries, null, 2), "utf-8");
+  await redis.set(REDIS_KEY, entries);
   return entry;
 }
