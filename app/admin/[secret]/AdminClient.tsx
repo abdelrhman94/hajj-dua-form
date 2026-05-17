@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import * as XLSX from "xlsx";
+import XLSX from "xlsx-js-style";
 import type { DuaEntry } from "@/lib/types";
 
 interface AdminClientProps {
@@ -16,6 +16,8 @@ export default function AdminClient({
   const [entries, setEntries] = useState(initialEntries);
   const [showAll, setShowAll] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<DuaEntry | null>(null);
 
   const visibleEntries = showAll ? entries : entries.slice(-5);
 
@@ -34,25 +36,110 @@ export default function AdminClient({
     }
   };
 
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
+    const id = confirmDelete.id;
+    setDeleting(id);
+    setConfirmDelete(null);
+    try {
+      const res = await fetch(`/api/duas?key=${secretKey}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        setEntries((prev) => prev.filter((e) => e.id !== id));
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   const exportToExcel = () => {
-    const rows: Record<string, string>[] = [];
+    const headerStyle = {
+      font: { bold: true, color: { rgb: "FFFFFF" }, sz: 14 },
+      fill: { fgColor: { rgb: "2D6A4F" } },
+      alignment: { horizontal: "center" as const, vertical: "center" as const },
+      border: {
+        top: { style: "thin" as const, color: { rgb: "1B4332" } },
+        bottom: { style: "thin" as const, color: { rgb: "1B4332" } },
+        left: { style: "thin" as const, color: { rgb: "1B4332" } },
+        right: { style: "thin" as const, color: { rgb: "1B4332" } },
+      },
+    };
+
+    const nameStyle = {
+      font: { bold: true, sz: 12, color: { rgb: "1A1208" } },
+      fill: { fgColor: { rgb: "FDF6E3" } },
+      alignment: { horizontal: "right" as const, vertical: "center" as const },
+      border: {
+        top: { style: "thin" as const, color: { rgb: "E8D5A3" } },
+        bottom: { style: "thin" as const, color: { rgb: "E8D5A3" } },
+        left: { style: "thin" as const, color: { rgb: "E8D5A3" } },
+        right: { style: "thin" as const, color: { rgb: "E8D5A3" } },
+      },
+    };
+
+    const duaStyle = {
+      font: { sz: 11, color: { rgb: "5A3E1B" } },
+      fill: { fgColor: { rgb: "FFFFFF" } },
+      alignment: { horizontal: "right" as const, vertical: "center" as const, wrapText: true },
+      border: {
+        top: { style: "thin" as const, color: { rgb: "E8D5A3" } },
+        bottom: { style: "thin" as const, color: { rgb: "E8D5A3" } },
+        left: { style: "thin" as const, color: { rgb: "E8D5A3" } },
+        right: { style: "thin" as const, color: { rgb: "E8D5A3" } },
+      },
+    };
+
+    const timeStyle = {
+      font: { sz: 10, color: { rgb: "888888" } },
+      fill: { fgColor: { rgb: "FDF6E3" } },
+      alignment: { horizontal: "center" as const, vertical: "center" as const },
+      border: {
+        top: { style: "thin" as const, color: { rgb: "E8D5A3" } },
+        bottom: { style: "thin" as const, color: { rgb: "E8D5A3" } },
+        left: { style: "thin" as const, color: { rgb: "E8D5A3" } },
+        right: { style: "thin" as const, color: { rgb: "E8D5A3" } },
+      },
+    };
+
+    const separatorStyle = {
+      fill: { fgColor: { rgb: "C9A84C" } },
+    };
+
+    const data: { v: string; t: string; s: object }[][] = [];
+
+    data.push([
+      { v: "الاسم", t: "s", s: headerStyle },
+      { v: "الدعاء", t: "s", s: headerStyle },
+      { v: "وقت الإرسال", t: "s", s: headerStyle },
+    ]);
+
     entries.forEach((entry) => {
       entry.duas.forEach((dua, i) => {
-        rows.push({
-          الاسم: i === 0 ? entry.name : "",
-          الدعاء: dua,
-          "وقت الإرسال": i === 0 ? entry.submittedAt : "",
-        });
+        data.push([
+          { v: i === 0 ? entry.name : "", t: "s", s: nameStyle },
+          { v: dua, t: "s", s: duaStyle },
+          { v: i === 0 ? entry.submittedAt : "", t: "s", s: timeStyle },
+        ]);
       });
-      rows.push({ الاسم: "", الدعاء: "", "وقت الإرسال": "" });
+      data.push([
+        { v: "", t: "s", s: separatorStyle },
+        { v: "", t: "s", s: separatorStyle },
+        { v: "", t: "s", s: separatorStyle },
+      ]);
     });
 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = [{ wch: 25 }, { wch: 40 }, { wch: 22 }];
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws["!cols"] = [{ wch: 28 }, { wch: 45 }, { wch: 24 }];
+    ws["!rows"] = [{ hpt: 30 }, ...Array(data.length - 1).fill({ hpt: 24 })];
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "دعوات الحجاج");
-    XLSX.writeFile(wb, "دعوات_الحج_1446.xlsx");
+    XLSX.writeFile(wb, "دعوات_الحج_1447.xlsx");
   };
 
   const totalDuas = entries.reduce((sum, e) => sum + e.duas.length, 0);
@@ -124,13 +211,22 @@ export default function AdminClient({
                   key={entry.id}
                   className="bg-white rounded-xl p-3.5 px-4.5 border-r-4 border-r-gold"
                 >
-                  <div className="flex justify-between mb-2 flex-wrap gap-1">
+                  <div className="flex justify-between mb-2 flex-wrap gap-1 items-center">
                     <span className="font-extrabold text-dark text-base">
                       {entry.name}
                     </span>
-                    <span className="text-gray-400 text-[0.78rem]">
-                      {entry.submittedAt}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-400 text-[0.78rem]">
+                        {entry.submittedAt}
+                      </span>
+                      <button
+                        onClick={() => setConfirmDelete(entry)}
+                        disabled={deleting === entry.id}
+                        className="text-red-400 hover:text-red-600 text-sm cursor-pointer transition-colors disabled:opacity-50"
+                      >
+                        {deleting === entry.id ? "..." : "🗑️"}
+                      </button>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {entry.duas.map((dua) => (
@@ -163,6 +259,64 @@ export default function AdminClient({
           تقبل الله منا ومنكم الطاعات 🌙
         </p>
       </div>
+
+      {/* Delete confirmation modal */}
+      {confirmDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setConfirmDelete(null)}
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative bg-card rounded-2xl p-6 max-w-sm w-full shadow-[0_0_0_1px_rgba(201,168,76,0.2),0_24px_80px_rgba(0,0,0,0.5)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center mb-5">
+              <div className="text-4xl mb-3">⚠️</div>
+              <h3 className="text-dark text-lg font-black mb-2">
+                تأكيد الحذف
+              </h3>
+              <p className="text-brown/70 text-sm leading-relaxed">
+                هل أنت متأكد من حذف دعوات
+                <span className="font-bold text-dark mx-1">
+                  {confirmDelete.name}
+                </span>
+                ؟
+              </p>
+              <div className="flex flex-wrap gap-1.5 justify-center mt-3">
+                {confirmDelete.duas.slice(0, 3).map((dua) => (
+                  <span
+                    key={dua}
+                    className="bg-chip-bg border border-gold/40 rounded-full py-0.5 px-2.5 text-[0.75rem] text-brown"
+                  >
+                    {dua}
+                  </span>
+                ))}
+                {confirmDelete.duas.length > 3 && (
+                  <span className="text-brown/50 text-[0.75rem] py-0.5">
+                    +{confirmDelete.duas.length - 3} أخرى
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 py-2.5 bg-gray-100 text-brown border-none rounded-xl font-bold cursor-pointer text-sm transition-all hover:bg-gray-200"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 py-2.5 bg-red-500 text-white border-none rounded-xl font-bold cursor-pointer text-sm transition-all hover:bg-red-600"
+              >
+                🗑️ حذف
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
