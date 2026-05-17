@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readEntries, addEntry } from "@/lib/storage";
+import { readEntries, addEntry, deleteEntry } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -53,5 +53,31 @@ export async function POST(request: NextRequest) {
       { error: "حدث خطأ في الخادم" },
       { status: 500 }
     );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const key = request.nextUrl.searchParams.get("key");
+  const secret = process.env.ADMIN_SECRET;
+
+  if (!secret || key !== secret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { id } = await request.json();
+
+    if (!id || typeof id !== "number") {
+      return NextResponse.json({ error: "معرف غير صالح" }, { status: 400 });
+    }
+
+    const deleted = await deleteEntry(id);
+    if (!deleted) {
+      return NextResponse.json({ error: "لم يتم العثور على الدعاء" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json({ error: "حدث خطأ في الخادم" }, { status: 500 });
   }
 }

@@ -37,3 +37,12 @@ export async function addEntry(name: string, duas: string[]): Promise<DuaEntry> 
   await redis.set(REDIS_KEY, entries);
   return entry;
 }
+
+export async function deleteEntry(id: number): Promise<boolean> {
+  const redis = getRedis();
+  const entries = await readEntries();
+  const filtered = entries.filter((e) => e.id !== id);
+  if (filtered.length === entries.length) return false;
+  await redis.set(REDIS_KEY, filtered);
+  return true;
+}
